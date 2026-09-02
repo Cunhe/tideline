@@ -1,3 +1,8 @@
+/**
+ * Single source of truth for platform head chrome (PWA, extensions.js, OG),
+ * shared by the Vite plugin and Nitro middleware. Plain ESM so `node --test`
+ * and the Nitro bundler can both consume it.
+ */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -25,28 +30,35 @@ const SHARE_META_KEYS = new Set([
 
 export function escapeHtml(value) {
   return String(value)
-    .replaceAll("&", "&")
-    .replaceAll("<", "<")
-    .replaceAll(">", ">")
-    .replaceAll('"', """)
-    .replaceAll("'", "&#39;");
+    .replaceAll("&", "\u0026amp;")
+    .replaceAll("<", "\u0026lt;")
+    .replaceAll(">", "\u0026gt;")
+    .replaceAll('"', "\u0026quot;")
+    .replaceAll("'", "\u0026#39;");
 }
 
+/** Inverse of escapeHtml. Decode amp last so a single pass undoes one encode. */
 function unescapeHtml(value) {
   return String(value)
-    .replaceAll("<", "<")
-    .replaceAll(">", ">")
-    .replaceAll(""", '"')
-    .replaceAll("&#39;", "'")
-    .replaceAll("&", "&");
+    .replaceAll("\u0026lt;", "<")
+    .replaceAll("\u0026gt;", ">")
+    .replaceAll("\u0026quot;", '"')
+    .replaceAll("\u0026#39;", "'")
+    .replaceAll("\u0026amp;", "&");
 }
 
+/** 6-digit hex for the og.grok.me placeholder, or "" if site.color is missing/invalid. */
 function placeholderCardColor(site = {}) {
   const raw = String(site.color ?? "").trim();
   const hex = raw.startsWith("#") ? raw.slice(1) : raw;
   return /^[0-9a-fA-F]{6}$/.test(hex) ? hex : "";
 }
 
+/**
+ * "wild-race.grok.me" → "Wild Race". Only published app hosts encode the
+ * display name in the first label. Preview / guest hosts are image origins
+ * only — slugifying them produced internal names like "Hds Abc 3000 Xy".
+ */
 export function appNameFromHost(hostHeader) {
   const host = String(hostHeader ?? "")
     .split(",")[0]
@@ -69,6 +81,7 @@ export function appNameFromHost(hostHeader) {
   );
 }
 
+/** True for Vercel system domains. Envoy rewrites origin Host to these; they SSO-protect `/og.jpg`. */
 function isVercelSystemHost(host) {
   return (
     host === "vercel.app" ||
@@ -78,6 +91,7 @@ function isVercelSystemHost(host) {
   );
 }
 
+/** Hostname suitable for absolute og:image URLs. Preview guests (X-Forwarded-Host) are allowed. */
 export function publicAppHost(hostHeader) {
   const host = String(hostHeader ?? "")
     .split(",")[0]
@@ -90,6 +104,12 @@ export function publicAppHost(hostHeader) {
   return host;
 }
 
+/**
+ * Published apps always use `VITE_PUBLIC_HOSTNAME` (the grok.me host the
+ * deployer injects). Live preview has no such env, so fall back to the
+ * request host / X-Forwarded-Host. Never prefer request Host on a published
+ * app — Envoy rewrites it to `*.vercel.app`.
+ */
 export function resolvePublicHost(hostHeader) {
   return (
     publicAppHost(process.env?.VITE_PUBLIC_HOSTNAME) || publicAppHost(hostHeader)
@@ -104,6 +124,7 @@ export function isInstallQuery(url) {
   return (install === "1" || install === "true") && platform === "ios";
 }
 
+/** Paths that can carry an app document (vs assets / API / internals). */
 export function isDocumentPath(pathname) {
   const path = String(pathname ?? "");
   return (
@@ -120,6 +141,7 @@ export function acceptsHtml(accept) {
   return value === "" || value.includes("text/html") || value.includes("*/*");
 }
 
+/** The same URL without the install-tutorial params (used as the app link). */
 export function stripInstallParams(url) {
   const [path = "/", query = ""] = String(url ?? "/").split("?", 2);
   const params = new URLSearchParams(query);
@@ -162,6 +184,8 @@ export function renderWebManifest(hostHeader) {
 
 export function grokPwaHeadTags(appName = DEFAULT_APP_NAME) {
   return [
+    // Standalone display comes from the manifest ("display": "standalone");
+    // the legacy *-web-app-capable metas it replaces are deliberately absent.
     ["manifest", '<link rel="manifest" href="/__grok/manifest.webmanifest">'],
     ["apple-touch-icon", '<link rel="apple-touch-icon" href="/__grok/icon-180.png">'],
     [
@@ -203,6 +227,7 @@ export function grokXCreatorHeadTags(creator = readXCreator(), creatorId = readX
   ];
 }
 
+/** Platform "Created with Grok" banner — injected into every HTML document. */
 export function grokExtensionsHeadTags(projectId = readGrokProjectId()) {
   const id = escapeHtml(projectId);
   const tags = [];
@@ -227,6 +252,7 @@ export function readOgSite(cwd = process.cwd()) {
   }
 }
 
+/** Public path of an on-disk share card, or "" if neither file exists. */
 export function ogCardPublicPath(cwd = process.cwd()) {
   if (existsSync(join(cwd, "public/og.jpg"))) return "/og.jpg";
   if (existsSync(join(cwd, "public/og.png"))) return "/og.png";
@@ -235,9 +261,11 @@ export function ogCardPublicPath(cwd = process.cwd()) {
 
 function detectCustomOgCard(cwd = process.cwd(), site = {}) {
   if (ogCardPublicPath(cwd)) return true;
+  // Vercel runtime has no public/: trust a bake that already saw the file.
   return siteHasCustomCard(site) || Boolean(String(site.image ?? "").trim());
 }
 
+/** Snapshot for Vite/Nitro to bake into the server bundle (Vercel has no workspace FS). */
 export function snapshotOgIdentity(cwd = process.cwd()) {
   const site = { ...readOgSite(cwd) };
   const disk = ogCardPublicPath(cwd);
@@ -245,6 +273,7 @@ export function snapshotOgIdentity(cwd = process.cwd()) {
     site.card = "custom";
     site.image = disk;
   } else {
+    // site.json `card=custom` without a file must not bake a 404 /og.jpg URL.
     if (siteHasCustomCard(site)) delete site.card;
     if (site.image) delete site.image;
   }
@@ -288,10 +317,16 @@ export function siteHasCustomCard(site = {}) {
   return String(site.card ?? "").toLowerCase() === "custom";
 }
 
+/**
+ * Preview: public/og.jpg|png on disk.
+ * Vercel: the bake (`card=custom` / `image`) because the function cannot stat public/.
+ * Otherwise empty — caller emits the og.grok.me placeholder.
+ */
 export function resolveOgCardAsset(site = {}, cwd = process.cwd()) {
   return ogCardPublicPath(cwd) || (detectCustomOgCard(cwd, site) ? String(site.image ?? "").trim() || "/og.jpg" : "");
 }
 
+/** Stamp `card=custom` when public/og.jpg or public/og.png is on disk. */
 function applyCustomCardFromFs(site, cwd) {
   const disk = ogCardPublicPath(cwd);
   if (!disk) return site;
@@ -367,6 +402,10 @@ function insertBeforeHeadClose(html, snippet) {
 
 export function normalizeHeadContext(ctx = {}) {
   const cwd = ctx.cwd ?? process.cwd();
+  // Middleware passes a baked `site`. Still consult the workspace so a
+  // public/og.jpg generated after that snapshot (or missed by a wrong cwd)
+  // wins over the og.grok.me placeholder. Vercel has no public/ to read, so
+  // a correct bake is unchanged.
   const site = applyCustomCardFromFs(
     ctx.site !== undefined ? ctx.site : snapshotOgIdentity(cwd).site,
     cwd,
@@ -438,8 +477,15 @@ function findHeadClose(buf) {
   return at;
 }
 
+/**
+ * Streaming head injector: buffers only until `</head>` (ASCII marker; never
+ * appears inside a UTF-8 continuation byte), overwrites share-card metas,
+ * then passes later chunks through so streaming SSR keeps streaming.
+ */
 export function createHeadInjector(ctx = {}) {
   const normalized = normalizeHeadContext(ctx);
+
+  /** @type {Buffer[]} */
   let pending = [];
   let done = false;
 
@@ -455,6 +501,7 @@ export function createHeadInjector(ctx = {}) {
     });
 
   return {
+    /** @param {Uint8Array | string} chunk @returns {Buffer[]} chunks ready to emit */
     push(chunk) {
       const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       if (done) return [buf];
@@ -468,6 +515,7 @@ export function createHeadInjector(ctx = {}) {
       const head = apply(joined.subarray(0, at + closeLen).toString("utf8"));
       return [Buffer.concat([Buffer.from(head, "utf8"), joined.subarray(at + closeLen)])];
     },
+    /** @returns {Buffer[]} whatever is still buffered (no `</head>` seen) */
     flush() {
       if (done || pending.length === 0) return [];
       const rest = Buffer.concat(pending);
