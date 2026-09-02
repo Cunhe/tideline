@@ -1,0 +1,113 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme {
+  --font-sans: "IBM Plex Sans", "Noto Sans SC", "PingFang SC", "Hiragino Sans GB",
+    system-ui, sans-serif;
+  --font-display: "Syne", "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas,
+    monospace;
+
+  --color-bg: #09090b;
+  --color-surface: #12141a;
+  --color-elevated: #1a1d26;
+  --color-panel: #151820;
+  --color-fg: #e8eae9;
+  --color-muted: #8b908c;
+  --color-subtle: #5c605e;
+  --color-border: #262a32;
+  --color-border-strong: #343944;
+  --color-accent: #8eb8b4;
+  --color-accent-fg: #0a0c0c;
+  --color-danger: #c47a72;
+  --color-playhead: #d7e6e3;
+  --color-key-white: #d8dbd6;
+  --color-key-black: #1c1e24;
+  --color-grid-bar: #2c313c;
+  --color-grid-beat: #1f232c;
+  --color-grid-sub: #181b22;
+
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.375rem;
+  --radius-2xl: 1.75rem;
+
+  --shadow-border: 0 0 0 1px rgb(255 255 255 / 0.08);
+  --shadow-lift: 0 0 0 1px rgb(255 255 255 / 0.1),
+    0 18px 40px -24px rgb(0 0 0 / 0.7);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--color-bg);
+    color: var(--color-fg);
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-accent) 40%, transparent);
+    color: var(--color-fg);
+  }
+
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.tap-press {
+  transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tap-press:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 99px;
+}
