@@ -1,9 +1,2 @@
-export { P2PRoom, defaultIceServers } from "./p2p";
-export type {
-  PeerInfo,
-  P2PRoomOptions,
-  SignalKind,
-  PeerRow,
-  SignalRow,
-  RtcPollResponse,
-} from "./p2p";
+/** P2P helpers are unused by Tideline; keep this module empty so typecheck passes. */
+export {};
